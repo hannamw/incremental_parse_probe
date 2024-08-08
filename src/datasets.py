@@ -10,7 +10,7 @@ import json
 
 from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning import LightningDataModule
-from transformers import AutoTokenizer, GPT2LMHeadModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import task
 from collections import namedtuple
 
@@ -462,11 +462,11 @@ class PTB_Dataset(LightningDataModule):
         device = "cuda"
         self.probe = probe
         tokenizer = AutoTokenizer.from_pretrained(
-            config["pretrained_model"], local_files_only=True
+            config["pretrained_model"], local_files_only=False#True
         )
         model = (
-            GPT2LMHeadModel.from_pretrained(
-                config["pretrained_model"], local_files_only=True
+            AutoModelForCausalLM.from_pretrained(
+                config["pretrained_model"], local_files_only=False#True
             )
             .to(device)
             .eval()

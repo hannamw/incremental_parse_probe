@@ -335,6 +335,29 @@ class StackActionProbe(IncrementalProbe):
 
         return self.forward(emb_pairs)
 
+    def get_distributions(self, batch):
+        self.device = next(self.parameters()).device
+
+        if self.add_root:
+            model_embeddings = self.add_root_model_embeddings(batch)[:, 0, :, :].to(
+                self.device
+            )
+
+        oracle_action_idxs, targets = self.oracle.targets_idxs(batch)
+
+        first_emb_indx, second_emb_indx = (
+            oracle_action_idxs[[0, 1], :],
+            oracle_action_idxs[[0, 2], :],
+        )
+
+        #print(model_embeddings.size(), first_emb_indx, second_emb_indx)
+        emb_pairs = torch.cat(
+            (model_embeddings[first_emb_indx], model_embeddings[second_emb_indx]), dim=1
+        )
+
+        output_distributions = self.forward(emb_pairs)
+        return output_distributions
+
     def batch_step_train(self, batch):
         self.device = next(self.parameters()).device
 

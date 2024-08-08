@@ -13,11 +13,22 @@ torch.backends.cudnn.allow_tf32 = False
 class ClozeTail_gpt2(nn.Module):
     def __init__(self, cloze_model, layer_idx):
         super(ClozeTail_gpt2, self).__init__()
-        self.last_layer = cloze_model.lm_head
+        self.layer = layer_idx
+        self.cloze_model = cloze_model
+        self.model_name = cloze_model.config._name_or_path
+        if 'pythia' in self.model_name:
+            self.last_layer = cloze_model.embed_out
+        else:
+            self.last_layer = cloze_model.lm_head
 
     def forward(self, x):
-        transformer_output = self.transformer(x)[0]
-        return transformer_output
+        if 'pythia' in self.model_name:
+            for transformer_layer in self.cloze_model.gpt_neox.layers[self.layer:]:
+                transformer_output = transformer_layer(x)
+            transformer_output = self.cloze_model.gpt_neox.final_layer_norm(transformer_output[0])
+        else:
+            transformer_output = self.cloze_model.transformer(x)[0]
+        return self.last_layer(transformer_output)
 
 
 class GPT2_extended(nn.Module):
@@ -33,12 +44,20 @@ class GPT2_extended(nn.Module):
             param.requires_grad = False
 
     def tail_by_layer(self, layer, x):
-        if layer < self.model.config.n_layer:
+        if 'pythia' in self.model.config._name_or_path:
+            n_model_layers = self.model.config.num_hidden_layers
+        else:
+            n_model_layers = self.model.config.n_layers
+        if layer < n_model_layers:
             tl = ClozeTail_gpt2(self.model, layer)
             tl.eval()
             return tl(x)
         else:
-            return self.model.lm_head(x)
+            if 'pythia' in self.model.config._name_or_path:
+                self.last_layer = self.model.embed_out
+            else:
+                self.last_layer = self.model.lm_head
+            return self.last_layer(x)
 
     def embeddings_w_map(self, sentence, layer):
         untokenized_sent = sentence.split()
@@ -213,10 +232,10 @@ class GPT2_extended(nn.Module):
             batch = {
                 "padded_embeddings": aligned_model_embeddings,
                 "gold_tuples": label_batch["gold_tuples"].clone(),
-                "action_ids": label_batch["action_ids"].clone(),
-                "continuous_action_masks": label_batch[
-                    "continuous_action_masks"
-                ].clone(),
+                #"action_ids": label_batch["action_ids"].clone(),
+                #"continuous_action_masks": label_batch[
+                #    "continuous_action_masks"
+                #].clone(),
             }
 
             loss_dict = probe.batch_step_train(batch)
@@ -545,10 +564,12 @@ class GPT2_extended(nn.Module):
 
                     if generative:
                         # and state batch data to meta batch
+                        vocab_size = self.model.embed_out.out_features if 'pythia' in self.model.config._name_or_path else self.tokenizer.vocab_size
+
                         state_batch = state.to_batch(probe)
                         mask = (
                             torch.zeros(
-                                sentence_tokens.shape[0], self.tokenizer.vocab_size
+                                sentence_tokens.shape[0], vocab_size
                             )
                             .to(self.model.device)
                             .unsqueeze(0)
@@ -588,7 +609,7 @@ class GPT2_extended(nn.Module):
                     probe=probe,
                     sent=sentence,
                     label_batch=batch,
-                    output_probs=False,
+                    #output_probs=False,
                     print_every=100,
                     lr=0.001,
                     patience=100,

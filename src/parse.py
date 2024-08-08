@@ -12,7 +12,7 @@ from task import ParseDepthTask
 from datasets import PTB_Dataset
 from utils import ignored_tags
 
-from transformers import AutoTokenizer, GPT2LMHeadModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from transition import *
 from utils import *
 from gpt2 import GPT2_extended
@@ -38,9 +38,9 @@ exp = IncrementalParseProbeExperiment.load_from_checkpoint(
 )
 p = exp.probe.eval()
 
-print("loading gpt2...")
+print(f"loading {l_args['pretrained_model']}...")
 device = "cuda"
-gpt2 = GPT2LMHeadModel.from_pretrained(
+gpt2 = AutoModelForCausalLM.from_pretrained(
     l_args["pretrained_model"], local_files_only=True
 )
 gpt2_tokenizer = AutoTokenizer.from_pretrained(
@@ -228,7 +228,7 @@ with open(distance_depth_data.test_dataset.data_path) as f:
         id_vars=["model", "probe_name", "layer"], var_name="metric", value_name="value"
     ).dropna()
 
-results_path = f'./results/results_{l_args["pretrained_model"]}_layer_{str(l_args["probe_params"]["layer"])}_{l_args["probe_params"]["probe_name"]}_beamsearch.csv'
+results_path = f'./results/results_{l_args["pretrained_model"].split("/")[-1]}_layer_{str(l_args["probe_params"]["layer"])}_{l_args["probe_params"]["probe_name"]}_beamsearch.csv'
 if os.path.exists(results_path):
     net_res = pd.read_csv(results_path)
     pd.concat([results, net_res]).drop_duplicates(
