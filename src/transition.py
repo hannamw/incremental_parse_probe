@@ -158,6 +158,9 @@ class ParserState_dec:
             res._transitionset = copy.copy(self._transitionset)
         return res
 
+    def __lt__(self, other):
+        return -self.log_prob < -other.log_prob
+
 class ParserState:
     def __init__(self, sentence, transsys=None, goldrels=None):
 
